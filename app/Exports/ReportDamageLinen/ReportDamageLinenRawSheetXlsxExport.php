@@ -1,0 +1,179 @@
+<?php
+
+namespace App\Exports\ReportDamageLinen;
+
+use Illuminate\Contracts\View\View;
+use Maatwebsite\Excel\Concerns\FromView;
+use Maatwebsite\Excel\Concerns\WithEvents;
+use Maatwebsite\Excel\Concerns\WithDrawings;
+use Maatwebsite\Excel\Events\AfterSheet;
+use PhpOffice\PhpSpreadsheet\Worksheet\Drawing;
+use PhpOffice\PhpSpreadsheet\Style\Alignment;
+use PhpOffice\PhpSpreadsheet\Worksheet\PageSetup;
+use Maatwebsite\Excel\Concerns\WithTitle;
+use Illuminate\Support\Facades\DB;
+
+class ReportDamageLinenRawSheetXlsxExport implements FromView, WithDrawings, WithEvents, WithTitle
+{
+    protected $HptCode;
+
+    public function __construct($HptCode)
+    {
+        $this->HptCode = $HptCode;
+    }
+
+    public function title(): string
+    {
+        return   "รายการผ้าชำรุด ดิบ";
+    }
+
+    public function view(): View
+    {
+        $HptCode = $this->HptCode;
+
+        $reportDate =  date('m-Y');
+
+        $thaiMonths = config('myconfig.thai_months');
+
+        // แปลงเป็น timestamp
+        $reportTimestamp = strtotime('01-' . $reportDate);
+        $previousTimestamp = strtotime('-1 month', $reportTimestamp);
+        $currentMonthNum = date('m', $reportTimestamp);
+        $previousMonthNum = date('m', $previousTimestamp);
+
+        $currentMonthName = $thaiMonths[$currentMonthNum];
+        $previousMonthName = $thaiMonths[$previousMonthNum];
+
+        $currentYear = date('Y', $reportTimestamp);
+        $previousYear = date('Y', $previousTimestamp);
+
+        $data = DB::select(DB::raw("
+        SELECT
+                department.DepName,
+                item.ItemName,
+                itemstock_RFID.RfidCode,
+                itemstock_RFID.QrCode,
+                itemstock_RFID.ReadCount,
+                damagenh.DocDate 
+            FROM
+                damagenh
+                INNER JOIN damagenh_detail ON damagenh.DocNo = damagenh_detail.DocNo
+                INNER JOIN damagenh_detail_round ON damagenh_detail.Id = damagenh_detail_round.RowID
+                INNER JOIN department ON damagenh_detail_round.DepCode = department.DepCode
+                INNER JOIN item ON damagenh_detail_round.ItemCode = item.ItemCode
+                INNER JOIN itemstock_RFID ON damagenh_detail_round.RFID = itemstock_RFID.RfidCode 
+            WHERE
+                damagenh.IsStatus = 1 
+                -- AND damagenh.DepCode = 'BPHCENTER'
+		GROUP BY  itemstock_RFID.RfidCode   
+        "));
+
+        // dd($data);
+        return view('exports.reportDamage_xlsx.reportDamageLinenRaw', compact(
+            'data',
+            'currentMonthName',
+            'previousMonthName',
+            'currentYear',
+            'previousYear'
+        ));
+    }
+
+
+    public function registerEvents(): array
+    {
+        return [
+            AfterSheet::class => function (AfterSheet $event) {
+                $sheet = $event->sheet->getDelegate();
+                $sheet->getPageSetup()->setScale(100); // บังคับให้ขนาดเหมือนกันทุกระบบ
+                // $sheet->getPageSetup()->setFitToWidth(1);
+                // $sheet->getPageSetup()->setFitToHeight(1);
+
+                // ตั้งค่าขนาดกระดาษเป็น A4
+                $sheet->getPageSetup()->setPaperSize(PageSetup::PAPERSIZE_A4);
+                $sheet->getPageSetup()->setOrientation(PageSetup::ORIENTATION_PORTRAIT); // แนวตั้ง
+
+                // // ตั้งค่าขอบกระดาษ (หน่วยเป็น points)
+                $sheet->getPageMargins()->setTop(0.35);
+                $sheet->getPageMargins()->setRight(0.25);
+                $sheet->getPageMargins()->setLeft(0.35);
+                $sheet->getPageMargins()->setBottom(0);
+
+                $sheet->getStyle('C1')->applyFromArray([
+                    'font' => [
+                        'name' => 'Angsana New',
+                        'size' => 13,
+                    ],
+                ]);
+                $sheet->getStyle('A2')->applyFromArray([
+                    'font' => [
+                        'name' => 'Angsana New',
+                        'size' => 28,
+                        'bold' => true,
+                    ],
+                ]);
+
+                $highestRow = $sheet->getHighestRow(); // หาบรรทัดสุดท้ายที่มีข้อมูล
+                $sheet->getStyle("A3:Z{$highestRow}")->applyFromArray([
+                    'font' => [
+                        'name' => 'Angsana New',
+                        'size' => 16,
+                    ],
+                ]);
+
+                $event->sheet->getDelegate()->getStyle('A3:G3')->applyFromArray([
+                    'fill' => [
+                        'fillType' => \PhpOffice\PhpSpreadsheet\Style\Fill::FILL_SOLID,
+                        'startColor' => [
+                            'rgb' => '8fdaff',
+                        ],
+                    ],
+                ]);
+
+
+                // ตั้งค่าความกว้างของคอลัมน์
+                $columns = [
+                    'A' => 5,
+                    'B' => 45,
+                    'C' => 25,
+                    'D' => 35,
+                    'E' => 20,
+                    'F' => 20,
+                    'G' => 20,
+                ];
+                foreach ($columns as $col => $width) {
+                    $sheet->getColumnDimension($col)->setWidth($width);
+                }
+
+                // ปรับความสูงของแถว
+                $rows = [
+                    2 => 50,
+
+                ];
+
+                foreach ($rows as $row => $height) {
+                    $sheet->getRowDimension($row)->setRowHeight($height);
+                }
+
+                $sheet->getStyle('C1')->getAlignment()->setHorizontal(Alignment::HORIZONTAL_RIGHT);
+                $sheet->getStyle('C1')->getAlignment()->setVertical(Alignment::VERTICAL_TOP);
+
+                $sheet->getStyle('A2:L3')->getAlignment()->setHorizontal(Alignment::HORIZONTAL_CENTER);
+                $sheet->getStyle('A2:L3')->getAlignment()->setVertical(Alignment::VERTICAL_CENTER);
+            },
+        ];
+    }
+
+    public function drawings()
+    {
+        $drawing = new Drawing();
+        $drawing->setName('Company Logo');
+        $drawing->setDescription('This is the company logo');
+        $drawing->setPath(public_path('images/Nhealth_linen 4.0.png'));
+        $drawing->setHeight(50);
+        $drawing->setCoordinates('A2');
+        $drawing->setOffsetX(60);
+        $drawing->setOffsetY(10);
+
+        return [$drawing];
+    }
+}
