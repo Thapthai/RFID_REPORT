@@ -61,11 +61,12 @@ class ReportDamageLinenRawSheetXlsxExport implements FromView, WithDrawings, Wit
                 INNER JOIN damagenh_detail_round ON damagenh_detail.Id = damagenh_detail_round.RowID
                 INNER JOIN department ON damagenh_detail_round.DepCode = department.DepCode
                 INNER JOIN item ON damagenh_detail_round.ItemCode = item.ItemCode
-                INNER JOIN itemstock_RFID ON damagenh_detail_round.RFID = itemstock_RFID.RfidCode 
+                INNER JOIN itemstock_RFID ON SUBSTRING_INDEX(damagenh_detail_round.RFID, '#', 1) = SUBSTRING_INDEX(itemstock_RFID.RfidCode, '#', 1)
             WHERE
                 damagenh.IsStatus = 1 
                 -- AND damagenh.DepCode = 'BPHCENTER'
-		GROUP BY  itemstock_RFID.RfidCode   
+		    GROUP BY  itemstock_RFID.RfidCode 
+            ORDER BY department.DepName ASC ,  item.ItemName ASC ,damagenh.DocDate ASC
         "));
 
         // dd($data);

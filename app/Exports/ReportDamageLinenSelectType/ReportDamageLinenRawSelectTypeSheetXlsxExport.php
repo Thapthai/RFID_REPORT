@@ -60,6 +60,8 @@ class ReportDamageLinenRawSelectTypeSheetXlsxExport implements FromView, WithDra
         $currentYear = date('Y', $reportTimestamp);
         $previousYear = date('Y', $previousTimestamp);
 
+        // dd($startDate, $endDate);
+
         $data = DB::select("
             SELECT
                 department.DepName,
@@ -73,7 +75,7 @@ class ReportDamageLinenRawSelectTypeSheetXlsxExport implements FromView, WithDra
             INNER JOIN damagenh_detail_round ON damagenh_detail.Id = damagenh_detail_round.RowID
             INNER JOIN item ON damagenh_detail_round.ItemCode = item.ItemCode
             INNER JOIN department ON damagenh_detail_round.DepCode = department.DepCode
-            INNER JOIN itemstock_RFID ON damagenh_detail_round.RFID = itemstock_RFID.RfidCode
+            INNER JOIN itemstock_RFID ON SUBSTRING_INDEX(damagenh_detail_round.RFID, '#', 1) = SUBSTRING_INDEX(itemstock_RFID.RfidCode, '#', 1) 
             WHERE DATE(damagenh.DocDate) BETWEEN '".$startDate."' AND '".$endDate."'
             GROUP BY damagenh_detail_round.RFID
             ORDER BY department.DepName, item.ItemName ASC;

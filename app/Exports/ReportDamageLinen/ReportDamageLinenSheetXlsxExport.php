@@ -42,21 +42,24 @@ class ReportDamageLinenSheetXlsxExport implements FromArray, WithHeadings, WithE
 
         // Main items query: group by DepName และ DepCode พร้อมแสดงจำนวนรวม
         $mainItems = DB::select("
-                SELECT
+                 SELECT
                     department.DepName,
                     department.DepCode,
-                    COUNT(itemstock_RFID.RfidCode) AS qty
+                    COUNT(DISTINCT SUBSTRING_INDEX(itemstock_RFID.RfidCode, '#', 1)) AS qty
                 FROM damagenh
                 INNER JOIN damagenh_detail ON damagenh.DocNo = damagenh_detail.DocNo
                 INNER JOIN damagenh_detail_round ON damagenh_detail.Id = damagenh_detail_round.RowID
                 LEFT JOIN department ON damagenh_detail_round.DepCode = department.DepCode
                 INNER JOIN item ON damagenh_detail_round.ItemCode = item.ItemCode
-                INNER JOIN itemstock_RFID ON damagenh_detail_round.RFID = itemstock_RFID.RfidCode 
+                INNER JOIN itemstock_RFID ON SUBSTRING_INDEX(damagenh_detail_round.RFID, '#', 1) = SUBSTRING_INDEX(itemstock_RFID.RfidCode, '#', 1)
                 WHERE damagenh.IsStatus = 1 
-                    -- AND damagenh.DepCode = 'BPHCENTER' 
+                 -- AND damagenh.DepCode = 'BPHCENTER' 
                 AND damagenh_detail_round.DepCode != '' 
-                GROUP BY department.DepName, department.DepCode
+                GROUP BY department.DepName, department.DepCode 
+                ORDER BY department.DepName ASC
             ");
+
+        // dd($mainItems);
 
         foreach ($mainItems as $item) {
             // Main row
@@ -69,7 +72,7 @@ class ReportDamageLinenSheetXlsxExport implements FromArray, WithHeadings, WithE
                     item.ItemName,
                     itemstock_RFID.RfidCode,
                     itemstock_RFID.QrCode,
-                    COUNT(itemstock_RFID.RfidCode) AS qty,
+                    COUNT(DISTINCT SUBSTRING_INDEX(itemstock_RFID.RfidCode, '#', 1)) AS qty,
                     damagenh.DocDate 
                 FROM
                     damagenh
@@ -77,13 +80,13 @@ class ReportDamageLinenSheetXlsxExport implements FromArray, WithHeadings, WithE
                     INNER JOIN damagenh_detail_round ON damagenh_detail.Id = damagenh_detail_round.RowID
                     INNER JOIN department ON damagenh_detail_round.DepCode = department.DepCode
                     INNER JOIN item ON damagenh_detail_round.ItemCode = item.ItemCode
-                    INNER JOIN itemstock_RFID ON damagenh_detail_round.RFID = itemstock_RFID.RfidCode 
+                    INNER JOIN itemstock_RFID ON SUBSTRING_INDEX(damagenh_detail_round.RFID, '#', 1) = SUBSTRING_INDEX(itemstock_RFID.RfidCode, '#', 1)
                 WHERE
-                    department.DepCode = ?
+                    department.DepCode = '".$item->DepCode."'
                     -- AND damagenh.DepCode = 'BPHCENTER' 
                     AND  damagenh.IsStatus = 1 
                   GROUP BY item.ItemName ASC
-                ", [$item->DepCode]);
+                ");
 
             foreach ($subItems as $sub) {
                 $itemName = $sub->ItemName;
