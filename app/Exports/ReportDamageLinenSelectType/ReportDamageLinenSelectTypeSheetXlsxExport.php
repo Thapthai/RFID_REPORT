@@ -21,14 +21,16 @@ class ReportDamageLinenSelectTypeSheetXlsxExport implements FromArray, WithHeadi
     protected $startDate;
     protected $endDate;
     protected $typeTopic;
+    protected $groupedData;
     protected $docDateRows = [];
     protected $itemRows = [];
-    public function __construct($HptCode, $startDate, $endDate, $typeTopic)
+    public function __construct($HptCode, $startDate, $endDate, $typeTopic, $groupedData = [])
     {
         $this->HptCode = $HptCode;
         $this->startDate = $startDate;
         $this->endDate = $endDate;
         $this->typeTopic = $typeTopic;
+        $this->groupedData = $groupedData;
     }
 
     public function title(): string
@@ -46,97 +48,34 @@ class ReportDamageLinenSelectTypeSheetXlsxExport implements FromArray, WithHeadi
         $rowPointer = 5;
         $count = 1;
 
-        $startDate = $this->startDate;
-        $endDate = $this->endDate;
+        // ใช้ข้อมูลที่ cleaned มาจาก parent class แล้ว
+        $groupedData = $this->groupedData;
 
-
-        // Main items query: group by DepName และ DepCode พร้อมแสดงจำนวนรวม
-        $mainItems = DB::select("
-        SELECT
-   		department.DepName,
-    	department.DepCode,
-    	COUNT(DISTINCT itemstock_RFID.RfidCode) AS qty
-		FROM damagenh
-		INNER JOIN damagenh_detail ON damagenh.DocNo = damagenh_detail.DocNo
-		INNER JOIN damagenh_detail_round ON damagenh_detail.Id = damagenh_detail_round.RowID
-		INNER JOIN department ON damagenh_detail_round.DepCode = department.DepCode
-		INNER JOIN item ON damagenh_detail_round.ItemCode = item.ItemCode
-	    INNER JOIN itemstock_RFID ON SUBSTRING_INDEX(damagenh_detail_round.RFID, '#', 1) = SUBSTRING_INDEX(itemstock_RFID.RfidCode, '#', 1)
-
-		WHERE   
-    		damagenh_detail_round.DepCode != ''
-            AND DATE(damagenh.DocDate) BETWEEN '" . $startDate . "' AND '" . $endDate . "'
-            AND damagenh.IsStatus = 1
-        GROUP BY
-            department.DepName,
-            department.DepCode
-        ORDER BY department.DepName ASC
-            ");
-
-        // dd($mainItems);
-
-        foreach ($mainItems as $item) {
-            // Main row
-            $rows[] = [$count++, $item->DepName, $item->qty, ''];
+        // สร้าง rows จากข้อมูลที่จัดกลุ่มแล้ว
+        foreach ($groupedData as $depCode => $depData) {
+            // แถว Department หลัก
+            $depQty = count($depData['rfids']);
+            $rows[] = [$count++, $depData['DepName'], $depQty, ''];
             $rowPointer++;
-            $docDates = DB::select("
-                    SELECT 
-                    DISTINCT DATE(damagenh.DocDate) AS DocDate, 
-                    COUNT(itemstock_RFID.RfidCode) AS qty
-                    FROM 
-                        damagenh
-                    INNER JOIN damagenh_detail ON damagenh.DocNo = damagenh_detail.DocNo
-                    INNER JOIN damagenh_detail_round ON damagenh_detail.Id = damagenh_detail_round.RowID
-                    INNER JOIN department ON damagenh_detail_round.DepCode = department.DepCode
-                    INNER JOIN itemstock_RFID ON SUBSTRING_INDEX(damagenh_detail_round.RFID, '#', 1) = SUBSTRING_INDEX(itemstock_RFID.RfidCode, '#', 1)
 
-                    WHERE 
-                        department.DepCode = '" . $item->DepCode . "'
-                        -- AND damagenh.DepCode = 'BPHCENTER' 
-                        AND DATE(damagenh.DocDate) BETWEEN '" . $startDate . "' AND '" . $endDate . "'
-                    GROUP BY 
-                        DATE(damagenh.DocDate)  -- เพิ่ม GROUP BY
-                    ORDER BY 
-                        damagenh.DocDate
-
-            ");
-
-            foreach ($docDates as $doc) {
-                $rows[] = ['', 'วันที่ ' . date('d/m/Y', strtotime("+543 years", strtotime($doc->DocDate))), $doc->qty, ''];
-
+            // วนลูปแต่ละวันที่
+            foreach ($depData['dates'] as $docDate => $dateData) {
+                $dateQty = count($dateData['rfids']);
+                $rows[] = ['', 'วันที่ ' . date('d/m/Y', strtotime("+543 years", strtotime($docDate))), $dateQty, ''];
                 $this->docDateRows[] = $rowPointer++; // สำหรับ outline level 1
 
-                // ดึงรายการ item ตาม DocDate นี้
-                $subItems = DB::select("
-                    SELECT
-                        item.ItemName,
-                        COUNT(itemstock_RFID.RfidCode) AS qty
-                    FROM
-                        damagenh
-                        INNER JOIN damagenh_detail ON damagenh.DocNo = damagenh_detail.DocNo
-                        INNER JOIN damagenh_detail_round ON damagenh_detail.Id = damagenh_detail_round.RowID
-                        INNER JOIN department ON damagenh_detail_round.DepCode = department.DepCode
-                        INNER JOIN item ON damagenh_detail_round.ItemCode = item.ItemCode
-                        INNER JOIN itemstock_RFID ON SUBSTRING_INDEX(damagenh_detail_round.RFID, '#', 1) = SUBSTRING_INDEX(itemstock_RFID.RfidCode, '#', 1)
-
-                    WHERE
-                        department.DepCode = '" . $item->DepCode . "'
-                        -- AND damagenh.DepCode = 'BPHCENTER' 
-                        AND DATE(damagenh.DocDate) = '" . $doc->DocDate . "'
-                    GROUP BY item.ItemName
-                    ORDER BY item.ItemName
-                    ");
-
-                foreach ($subItems as $sub) {
-                    $rows[] = ['', $sub->ItemName, $sub->qty];
+                // วนลูปแต่ละ Item
+                foreach ($dateData['items'] as $itemName => $rfids) {
+                    $itemQty = count($rfids);
+                    $rows[] = ['', $itemName, $itemQty];
                     $this->itemRows[] = $rowPointer++; // สำหรับ outline level 2
                 }
             }
+
+            // เว้นบรรทัดระหว่าง Department
             $rows[] = ['', '', '', ''];
             $rowPointer++;
         }
-
-        // dd($rows);
 
         return $rows;
     }

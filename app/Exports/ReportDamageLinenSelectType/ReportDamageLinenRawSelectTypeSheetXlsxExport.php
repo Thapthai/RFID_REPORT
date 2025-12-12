@@ -21,15 +21,17 @@ class ReportDamageLinenRawSelectTypeSheetXlsxExport implements FromView, WithDra
     protected $startDate;
     protected $endDate;
     protected $typeTopic;
+    protected $rawData;
 
 
-    public function __construct($HptCode, $startDate, $endDate, $typeTopic)
+    public function __construct($HptCode, $startDate, $endDate, $typeTopic, $rawData = [])
 
     {
         $this->HptCode = $HptCode;
         $this->startDate = $startDate;
         $this->endDate = $endDate;
         $this->typeTopic = $typeTopic;
+        $this->rawData = $rawData;
     }
 
     public function title(): string
@@ -60,28 +62,22 @@ class ReportDamageLinenRawSelectTypeSheetXlsxExport implements FromView, WithDra
         $currentYear = date('Y', $reportTimestamp);
         $previousYear = date('Y', $previousTimestamp);
 
-        // dd($startDate, $endDate);
 
-        $data = DB::select("
-            SELECT
-                department.DepName,
-                item.ItemName,
-                damagenh_detail_round.RFID,
-                damagenh_detail_round.QrCode,
-                MIN(damagenh.DocDate) AS DocDate,
-                MIN(itemstock_RFID.ReadCount) AS ReadCount
-            FROM damagenh
-            INNER JOIN damagenh_detail ON damagenh.DocNo = damagenh_detail.DocNo
-            INNER JOIN damagenh_detail_round ON damagenh_detail.Id = damagenh_detail_round.RowID
-            INNER JOIN item ON damagenh_detail_round.ItemCode = item.ItemCode
-            INNER JOIN department ON damagenh_detail_round.DepCode = department.DepCode
-            INNER JOIN itemstock_RFID ON SUBSTRING_INDEX(damagenh_detail_round.RFID, '#', 1) = SUBSTRING_INDEX(itemstock_RFID.RfidCode, '#', 1) 
-            WHERE DATE(damagenh.DocDate) BETWEEN '".$startDate."' AND '".$endDate."'
-            GROUP BY damagenh_detail_round.RFID
-            ORDER BY department.DepName, item.ItemName ASC;
-
-        ");
-
+        // ใช้ข้อมูล raw ที่ส่งมาจาก parent class แล้ว
+        // จัดกลุ่มข้อมูลเพื่อแสดงแค่ unique RFID (GROUP BY damagenh_detail_round.RFID)
+        $groupedByRFID = [];
+        foreach ($this->rawData as $row) {
+            $rfidKey = $row->RFID;
+            
+            // เก็บเฉพาะ record แรกของแต่ละ RFID
+            if (!isset($groupedByRFID[$rfidKey])) {
+                $groupedByRFID[$rfidKey] = $row;
+            }
+        }
+        
+ 
+        // แปลงกลับเป็น array
+        $data = array_values($groupedByRFID);
 
         return view('exports.reportDamageSelectType_xlsx.reportDamageLinenRawSelectType', compact(
             'typeTopic',
