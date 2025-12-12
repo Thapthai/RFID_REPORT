@@ -11,15 +11,16 @@ use PhpOffice\PhpSpreadsheet\Worksheet\Drawing;
 use PhpOffice\PhpSpreadsheet\Style\Alignment;
 use PhpOffice\PhpSpreadsheet\Worksheet\PageSetup;
 use Maatwebsite\Excel\Concerns\WithTitle;
-use Illuminate\Support\Facades\DB;
 
 class ReportDamageLinenRawSheetXlsxExport implements FromView, WithDrawings, WithEvents, WithTitle
 {
     protected $HptCode;
+    protected $rawData;
 
-    public function __construct($HptCode)
+    public function __construct($HptCode, $rawData)
     {
         $this->HptCode = $HptCode;
+        $this->rawData = $rawData;
     }
 
     public function title(): string
@@ -47,27 +48,8 @@ class ReportDamageLinenRawSheetXlsxExport implements FromView, WithDrawings, Wit
         $currentYear = date('Y', $reportTimestamp);
         $previousYear = date('Y', $previousTimestamp);
 
-        $data = DB::select(DB::raw("
-        SELECT
-                department.DepName,
-                item.ItemName,
-                itemstock_RFID.RfidCode,
-                itemstock_RFID.QrCode,
-                itemstock_RFID.ReadCount,
-                damagenh.DocDate 
-            FROM
-                damagenh
-                INNER JOIN damagenh_detail ON damagenh.DocNo = damagenh_detail.DocNo
-                INNER JOIN damagenh_detail_round ON damagenh_detail.Id = damagenh_detail_round.RowID
-                INNER JOIN department ON damagenh_detail_round.DepCode = department.DepCode
-                INNER JOIN item ON damagenh_detail_round.ItemCode = item.ItemCode
-                INNER JOIN itemstock_RFID ON SUBSTRING_INDEX(damagenh_detail_round.RFID, '#', 1) = SUBSTRING_INDEX(itemstock_RFID.RfidCode, '#', 1)
-            WHERE
-                damagenh.IsStatus = 1 
-                -- AND damagenh.DepCode = 'BPHCENTER'
-		    GROUP BY  itemstock_RFID.RfidCode 
-            ORDER BY department.DepName ASC ,  item.ItemName ASC ,damagenh.DocDate ASC
-        "));
+        // ใช้ข้อมูล rawData ที่ส่งมาจาก ReportDamageMultiSheetXlsxExport
+        $data = $this->rawData;
 
         // dd($data);
         return view('exports.reportDamage_xlsx.reportDamageLinenRaw', compact(

@@ -109,8 +109,6 @@ class ReportDamageSelectTypeMultiSheetXlsxExport implements WithMultipleSheets
             // เก็บข้อมูล raw สำหรับ sheet ที่ 2
             $rawData[] = $row;
         }
-
-
  
         return [
             new ReportDamageLinenSelectTypeSheetXlsxExport($HptCode, $startDate, $endDate, $typeTopic, $groupedData),

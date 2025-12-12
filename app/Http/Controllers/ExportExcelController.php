@@ -279,12 +279,6 @@ class ExportExcelController extends Controller
             }
         }
 
-        // echo 'startDate : ' . $startDate;
-        // echo '<br>';
-        // echo 'endDate : ' . $endDate;
-
-
-        // dd($Type);
         $date = date('d-m-Y H:i:s');
 
         return Excel::download(new ReportDamageSelectTypeMultiSheetXlsxExport($HptCode, $startDate, $endDate, $TypeTH), 'Damage' . $Type . 'Report(' . $date . ').xlsx');

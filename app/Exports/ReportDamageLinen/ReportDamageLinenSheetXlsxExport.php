@@ -18,11 +18,13 @@ use Maatwebsite\Excel\Concerns\WithCustomStartCell;
 class ReportDamageLinenSheetXlsxExport implements FromArray, WithHeadings, WithEvents, WithDrawings, WithCustomStartCell, WithTitle
 {
     protected $HptCode;
+    protected $groupedData;
     protected $hiddenRows = [];
 
-    public function __construct($HptCode)
+    public function __construct($HptCode, $groupedData)
     {
         $this->HptCode = $HptCode;
+        $this->groupedData = $groupedData;
     }
 
     public function title(): string
@@ -40,58 +42,33 @@ class ReportDamageLinenSheetXlsxExport implements FromArray, WithHeadings, WithE
         $rowPointer = 4;
         $count = 1;
 
-        // Main items query: group by DepName และ DepCode พร้อมแสดงจำนวนรวม
-        $mainItems = DB::select("
-                 SELECT
-                    department.DepName,
-                    department.DepCode,
-                    COUNT(DISTINCT SUBSTRING_INDEX(itemstock_RFID.RfidCode, '#', 1)) AS qty
-                FROM damagenh
-                INNER JOIN damagenh_detail ON damagenh.DocNo = damagenh_detail.DocNo
-                INNER JOIN damagenh_detail_round ON damagenh_detail.Id = damagenh_detail_round.RowID
-                LEFT JOIN department ON damagenh_detail_round.DepCode = department.DepCode
-                INNER JOIN item ON damagenh_detail_round.ItemCode = item.ItemCode
-                INNER JOIN itemstock_RFID ON SUBSTRING_INDEX(damagenh_detail_round.RFID, '#', 1) = SUBSTRING_INDEX(itemstock_RFID.RfidCode, '#', 1)
-                WHERE damagenh.IsStatus = 1 
-                 -- AND damagenh.DepCode = 'BPHCENTER' 
-                AND damagenh_detail_round.DepCode != '' 
-                GROUP BY department.DepName, department.DepCode 
-                ORDER BY department.DepName ASC
-            ");
+        // ใช้ข้อมูลจาก $groupedData ที่ส่งมาจาก ReportDamageMultiSheetXlsxExport
+        foreach ($this->groupedData as $depCode => $department) {
+            $depName = $department['DepName'];
+            $totalQty = count($department['rfids']); // นับจำนวน RFID ที่ไม่ซ้ำของ Department
 
-        // dd($mainItems);
-
-        foreach ($mainItems as $item) {
             // Main row
-            $rows[] = [$count++, $item->DepName, $item->qty];
+            $rows[] = [$count++, $depName, $totalQty];
             $rowPointer++;
 
-            // Sub-items query
-            $subItems = DB::select("
-                    SELECT
-                    item.ItemName,
-                    itemstock_RFID.RfidCode,
-                    itemstock_RFID.QrCode,
-                    COUNT(DISTINCT SUBSTRING_INDEX(itemstock_RFID.RfidCode, '#', 1)) AS qty,
-                    damagenh.DocDate 
-                FROM
-                    damagenh
-                    INNER JOIN damagenh_detail ON damagenh.DocNo = damagenh_detail.DocNo
-                    INNER JOIN damagenh_detail_round ON damagenh_detail.Id = damagenh_detail_round.RowID
-                    INNER JOIN department ON damagenh_detail_round.DepCode = department.DepCode
-                    INNER JOIN item ON damagenh_detail_round.ItemCode = item.ItemCode
-                    INNER JOIN itemstock_RFID ON SUBSTRING_INDEX(damagenh_detail_round.RFID, '#', 1) = SUBSTRING_INDEX(itemstock_RFID.RfidCode, '#', 1)
-                WHERE
-                    department.DepCode = '".$item->DepCode."'
-                    -- AND damagenh.DepCode = 'BPHCENTER' 
-                    AND  damagenh.IsStatus = 1 
-                  GROUP BY item.ItemName ASC
-                ");
+            // Sub-items: วนลูปผ่านวันที่และรายการสินค้า
+            $itemTotals = [];
+            foreach ($department['dates'] as $docDate => $dateData) {
+                foreach ($dateData['items'] as $itemName => $rfidCodes) {
+                    if (!isset($itemTotals[$itemName])) {
+                        $itemTotals[$itemName] = [];
+                    }
+                    // รวม RFID ที่ไม่ซ้ำของแต่ละ Item
+                    foreach ($rfidCodes as $rfid => $val) {
+                        $itemTotals[$itemName][$rfid] = true;
+                    }
+                }
+            }
 
-            foreach ($subItems as $sub) {
-                $itemName = $sub->ItemName;
-                $qty = $sub->qty;
-                $rows[] = ['', $itemName, $qty]; // ใช้ qty ที่นับจาก DB
+            // แสดง sub-items
+            foreach ($itemTotals as $itemName => $rfidCodes) {
+                $qty = count($rfidCodes);
+                $rows[] = ['', $itemName, $qty];
                 $this->hiddenRows[] = $rowPointer++;
             }
 
