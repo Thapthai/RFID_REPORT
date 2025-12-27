@@ -2,6 +2,7 @@
 
 namespace App\Http\Controllers;
 
+use App\Exports\ReportReportRoundFactoryXlsxExport;
 use App\Exports\ReportDamageDailyMultiSheetXlsxExport;
 use App\Exports\ReportDamageMultiSheetXlsxExport;
 use App\Exports\ReportDamageSelectTypeMultiSheetXlsxExport;
@@ -282,5 +283,22 @@ class ExportExcelController extends Controller
         $date = date('d-m-Y H:i:s');
 
         return Excel::download(new ReportDamageSelectTypeMultiSheetXlsxExport($HptCode, $startDate, $endDate, $TypeTH), 'Damage' . $Type . 'Report(' . $date . ').xlsx');
+    }
+
+    public function report_report_round_factory_xlsx(Request $request)
+    {
+        // Increase memory limit for large datasets
+        ini_set('memory_limit', '512M');
+        set_time_limit(300); // 5 minutes timeout
+
+        $HptCode = 'BPH';
+
+        if ($request->query('HptCode')) {
+            $HptCode = $request->query('HptCode');
+        }
+
+        $date = date('d-m-Y H:i:s');
+
+        return Excel::download(new ReportReportRoundFactoryXlsxExport($HptCode), 'Report Round Factory(' . $date . ').xlsx');
     }
 }

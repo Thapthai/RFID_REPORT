@@ -27,3 +27,5 @@ Route::get('/download/report_damage_xlsx', [ExportExcelController::class, 'repor
 // Route::get('/download/report_damage_daily_xlsx', [ExportExcelController::class, 'report_damage_daily_xlsx']);
 Route::get('/download/report_damage_select_type_xlsx', [ExportExcelController::class, 'report_damage_select_type_xlsx']);
 // Route::get('/download/report_damage_monthly_xlsx', [ExportExcelController::class, 'report_damage_monthly_xlsx']);
+
+Route::get('/download/report_report_round_factory_xlsx', [ExportExcelController::class, 'report_report_round_factory_xlsx']);
